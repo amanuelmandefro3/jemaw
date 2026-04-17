@@ -26,15 +26,21 @@ type Member = {
 export function CreateSettlementForm({
   jemawId,
   members,
+  currency = "USD",
+  defaultReceiverId,
+  defaultAmount,
 }: {
   jemawId: string;
   members: Member[];
+  currency?: string;
+  defaultReceiverId?: string;
+  defaultAmount?: string;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [receiverId, setReceiverId] = useState("");
-  const [amount, setAmount] = useState("");
+  const [receiverId, setReceiverId] = useState(defaultReceiverId ?? "");
+  const [amount, setAmount] = useState(defaultAmount ?? "");
   const [description, setDescription] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
@@ -135,7 +141,7 @@ export function CreateSettlementForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="amount">Amount ($)</Label>
+        <Label htmlFor="amount">Amount ({currency})</Label>
         <Input
           id="amount"
           type="number"

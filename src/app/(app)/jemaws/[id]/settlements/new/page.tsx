@@ -7,10 +7,13 @@ import { ArrowLeft } from "lucide-react";
 
 export default async function NewSettlementPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ receiverId?: string; amount?: string }>;
 }) {
   const { id } = await params;
+  const { receiverId: defaultReceiverId, amount: defaultAmount } = await searchParams;
 
   let jemaw;
   try {
@@ -37,6 +40,9 @@ export default async function NewSettlementPage({
       <CreateSettlementForm
         jemawId={id}
         members={otherMembers}
+        currency={jemaw.currency}
+        defaultReceiverId={defaultReceiverId}
+        defaultAmount={defaultAmount}
       />
     </div>
   );

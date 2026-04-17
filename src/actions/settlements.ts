@@ -5,6 +5,8 @@ import { settlements, jemawMembers, jemaws, users } from "@/db/schema";
 import { requireAuth } from "@/lib/session";
 import { notifyReceiverForSettlementApproval } from "@/lib/email";
 import { formatCurrency } from "@/lib/utils";
+import { logActivity } from "@/actions/activity";
+import { createNotification } from "@/actions/notifications";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -111,6 +113,24 @@ export async function createSettlement(input: CreateSettlementInput) {
 
   revalidatePath(`/jemaws/${jemawId}`);
 
+  // Log activity (fire and forget)
+  if (receiver && payer) {
+    logActivity({
+      jemawId,
+      userId,
+      action: "settlement.created",
+      targetType: "settlement",
+      targetId: newSettlement.id,
+      metadata: { amount, receiverName: receiver.name },
+    }).catch(console.error);
+
+    createNotification({
+      userId: receiverId,
+      message: `${payer.name} recorded a payment of ${formatCurrency(amount)} for you`,
+      link: `/jemaws/${jemawId}`,
+    }).catch(console.error);
+  }
+
   return {
     success: true,
     settlement: newSettlement,
@@ -198,6 +218,22 @@ export async function approveSettlement(
 
   revalidatePath(`/jemaws/${settlement.jemawId}`);
 
+  Promise.all([
+    logActivity({
+      jemawId: settlement.jemawId,
+      userId,
+      action: "settlement.approved",
+      targetType: "settlement",
+      targetId: settlementId,
+      metadata: { amount: settlement.amount },
+    }),
+    createNotification({
+      userId: settlement.payerId,
+      message: `Your payment of ${formatCurrency(settlement.amount)} was confirmed`,
+      link: `/jemaws/${settlement.jemawId}`,
+    }),
+  ]).catch(console.error);
+
   return {
     success: true,
     message: "Settlement approved successfully. Balances have been updated.",
@@ -247,6 +283,22 @@ export async function rejectSettlement(input: {
 
   revalidatePath(`/jemaws/${settlement.jemawId}`);
   revalidatePath("/pending");
+
+  Promise.all([
+    logActivity({
+      jemawId: settlement.jemawId,
+      userId,
+      action: "settlement.rejected",
+      targetType: "settlement",
+      targetId: settlementId,
+      metadata: { amount: settlement.amount, reason },
+    }),
+    createNotification({
+      userId: settlement.payerId,
+      message: `Your payment of ${formatCurrency(settlement.amount)} was rejected: ${reason}`,
+      link: `/jemaws/${settlement.jemawId}`,
+    }),
+  ]).catch(console.error);
 
   return {
     success: true,

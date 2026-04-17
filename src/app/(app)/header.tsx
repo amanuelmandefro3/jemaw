@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 interface HeaderProps {
   user: { name: string; email: string };
@@ -40,6 +40,7 @@ export function Header({ user }: HeaderProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isPending, startTransition] = useTransition();
   const [bellFlash, setBellFlash] = useState(false);
+  const bellFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const source = new EventSource("/api/notifications/stream");
@@ -62,15 +63,19 @@ export function Header({ user }: HeaderProps) {
             const existingIds = new Set(prev.map((n) => n.id));
             const incoming = parse(data.notifications).filter((n) => !existingIds.has(n.id));
             if (incoming.length === 0) return prev;
+            if (bellFlashTimer.current) clearTimeout(bellFlashTimer.current);
             setBellFlash(true);
-            setTimeout(() => setBellFlash(false), 1000);
+            bellFlashTimer.current = setTimeout(() => setBellFlash(false), 1000);
             return [...incoming, ...prev].slice(0, 20);
           });
         }
       } catch { /* ignore malformed events */ }
     };
 
-    return () => source.close();
+    return () => {
+      source.close();
+      if (bellFlashTimer.current) clearTimeout(bellFlashTimer.current);
+    };
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;

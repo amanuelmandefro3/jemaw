@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
         } catch { /* controller already closed */ }
       };
 
+      // Capture before the query so nothing created during the fetch is missed
+      let lastChecked = new Date();
+
       // Send all current notifications immediately on connect
       try {
         const initial = await db.query.notifications.findMany({
@@ -34,8 +37,6 @@ export async function GET(request: NextRequest) {
         controller.close();
         return;
       }
-
-      let lastChecked = new Date();
 
       // Poll every 5s for new notifications
       intervalId = setInterval(async () => {

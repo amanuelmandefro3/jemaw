@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createBill } from "@/actions/bills";
+import { uploadReceipt } from "@/lib/cloudinary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users } from "lucide-react";
+import { ImageIcon, Upload, X, Users } from "lucide-react";
 
 const CATEGORIES = [
   "breakfast", "lunch", "dinner", "groceries", "transportation",
@@ -31,26 +32,61 @@ export function CreateBillForm({
   jemawId,
   members,
   currentUserId,
+  currency,
 }: {
   jemawId: string;
   members: Member[];
   currentUserId: string;
+  currency: string;
 }) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<string>("other");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Always split equally among ALL members — no selection
   const splitUserIds = members.map((m) => m.userId);
   const perPerson =
     amount && !isNaN(parseFloat(amount)) && splitUserIds.length > 0
       ? (parseFloat(amount) / splitUserIds.length).toFixed(2)
       : null;
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("Image must be under 10MB"); return; }
+    setReceiptFile(file);
+    setReceiptPreview(URL.createObjectURL(file));
+  }
+
+  function removeReceipt() {
+    setReceiptFile(null);
+    setReceiptPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    let receiptUrl: string | undefined;
+    if (receiptFile) {
+      setUploading(true);
+      try {
+        receiptUrl = await uploadReceipt(receiptFile);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to upload receipt");
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
     startTransition(async () => {
       try {
         const result = await createBill({
@@ -59,6 +95,7 @@ export function CreateBillForm({
           amount,
           category: category as (typeof CATEGORIES)[number],
           splitUserIds,
+          receiptUrl,
         });
         toast.success(result.message);
         router.push(`/jemaws/${jemawId}`);
@@ -67,6 +104,8 @@ export function CreateBillForm({
       }
     });
   }
+
+  const isLoading = uploading || isPending;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -82,7 +121,7 @@ export function CreateBillForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="amount">Amount ($)</Label>
+        <Label htmlFor="amount">Amount ({currency})</Label>
         <Input
           id="amount"
           type="number"
@@ -111,7 +150,7 @@ export function CreateBillForm({
         </Select>
       </div>
 
-      {/* Split summary — always all members */}
+      {/* Split summary */}
       <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Users className="w-4 h-4" />
@@ -122,16 +161,53 @@ export function CreateBillForm({
             <div key={m.userId} className="flex justify-between py-1.5 text-sm">
               <span className="text-muted-foreground">
                 {m.user.name}
-                {m.userId === currentUserId && (
-                  <span className="ml-1 text-xs">(you)</span>
-                )}
+                {m.userId === currentUserId && <span className="ml-1 text-xs">(you)</span>}
               </span>
               <span className="font-medium tabular-nums">
-                {perPerson ? `$${perPerson}` : "—"}
+                {perPerson ? `${currency} ${perPerson}` : "—"}
               </span>
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Optional receipt upload */}
+      <div className="space-y-2">
+        <Label>Receipt / Invoice (optional)</Label>
+        {receiptPreview ? (
+          <div className="relative rounded-lg overflow-hidden border">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={receiptPreview}
+              alt="Receipt preview"
+              className="w-full max-h-48 object-contain bg-muted"
+            />
+            <button
+              type="button"
+              onClick={removeReceipt}
+              className="absolute top-2 right-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full border-2 border-dashed rounded-lg p-6 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <ImageIcon className="w-6 h-6" />
+            <span className="text-sm">Click to attach receipt (optional)</span>
+            <span className="text-xs">PNG, JPG, WEBP up to 10MB</span>
+          </button>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
 
       <div className="flex gap-2 pt-2">
@@ -140,11 +216,14 @@ export function CreateBillForm({
           variant="outline"
           className="flex-1"
           onClick={() => router.push(`/jemaws/${jemawId}`)}
+          disabled={isLoading}
         >
           Cancel
         </Button>
-        <Button type="submit" className="flex-1" disabled={isPending}>
-          {isPending ? "Adding…" : "Add bill"}
+        <Button type="submit" className="flex-1" disabled={isLoading}>
+          {uploading ? (
+            <><Upload className="w-4 h-4 mr-2 animate-bounce" /> Uploading…</>
+          ) : isPending ? "Adding…" : "Add bill"}
         </Button>
       </div>
     </form>

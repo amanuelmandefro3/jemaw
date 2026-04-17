@@ -11,6 +11,8 @@ import {
 import { requireAuth } from "@/lib/session";
 import { notifyUsersForBillApproval } from "@/lib/email";
 import { formatCurrency } from "@/lib/utils";
+import { logActivity } from "@/actions/activity";
+import { createNotification } from "@/actions/notifications";
 import { eq, and, sql, ne, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -41,6 +43,7 @@ const createBillSchema = z.object({
     "other",
   ]),
   splitUserIds: z.array(z.string()).min(1, "At least one user must be in the split"),
+  receiptUrl: z.string().url().optional(),
 });
 
 const approveBillSchema = z.object({
@@ -54,7 +57,7 @@ export async function createBill(input: CreateBillInput) {
   const userId = session.user.id;
 
   const validatedData = createBillSchema.parse(input);
-  const { jemawId, description, amount, category, splitUserIds } = validatedData;
+  const { jemawId, description, amount, category, splitUserIds, receiptUrl } = validatedData;
 
   // Verify user is a member of the jemaw
   const membership = await db.query.jemawMembers.findFirst({
@@ -97,6 +100,7 @@ export async function createBill(input: CreateBillInput) {
         category,
         paidById: userId,
         status: "pending",
+        receiptUrl: receiptUrl || null,
       })
       .returning();
 
@@ -145,6 +149,16 @@ export async function createBill(input: CreateBillInput) {
   }
 
   revalidatePath(`/jemaws/${jemawId}`);
+
+  // Log activity (fire and forget)
+  logActivity({
+    jemawId,
+    userId,
+    action: "bill.created",
+    targetType: "bill",
+    targetId: result.id,
+    metadata: { description, amount },
+  }).catch(console.error);
 
   return {
     success: true,
@@ -259,6 +273,23 @@ export async function approveBill(input: z.infer<typeof approveBillSchema>) {
 
   revalidatePath(`/jemaws/${bill.jemawId}`);
 
+  // Log activity and notify bill creator (fire and forget)
+  Promise.all([
+    logActivity({
+      jemawId: bill.jemawId,
+      userId,
+      action: "bill.approved",
+      targetType: "bill",
+      targetId: billId,
+      metadata: { description: bill.description, amount: bill.amount },
+    }),
+    createNotification({
+      userId: bill.paidById,
+      message: `Your bill "${bill.description}" was approved`,
+      link: `/jemaws/${bill.jemawId}`,
+    }),
+  ]).catch(console.error);
+
   return {
     success: true,
     message: "Bill approved successfully. Balances have been updated.",
@@ -309,6 +340,23 @@ export async function rejectBill(input: z.infer<typeof approveBillSchema>) {
     .where(eq(bills.id, billId));
 
   revalidatePath(`/jemaws/${bill.jemawId}`);
+
+  // Log activity and notify bill creator (fire and forget)
+  Promise.all([
+    logActivity({
+      jemawId: bill.jemawId,
+      userId,
+      action: "bill.rejected",
+      targetType: "bill",
+      targetId: billId,
+      metadata: { description: bill.description, amount: bill.amount },
+    }),
+    createNotification({
+      userId: bill.paidById,
+      message: `Your bill "${bill.description}" was rejected`,
+      link: `/jemaws/${bill.jemawId}`,
+    }),
+  ]).catch(console.error);
 
   return {
     success: true,

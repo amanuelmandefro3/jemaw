@@ -1,17 +1,33 @@
 "use server";
 
 import { db } from "@/db";
-import { jemaws, jemawMembers, jemawInvitations, users } from "@/db/schema";
+import {
+  jemaws,
+  jemawMembers,
+  jemawInvitations,
+  users,
+  bills,
+  billSplits,
+} from "@/db/schema";
 import { requireAuth } from "@/lib/session";
 import { sendJemawInvitationEmail } from "@/lib/email";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { v4 as uuidv4 } from "uuid";
+import { SUPPORTED_CURRENCIES } from "@/lib/constants";
 
 const createJemawSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   description: z.string().max(500).optional(),
+  currency: z.enum(SUPPORTED_CURRENCIES).default("USD"),
+});
+
+const updateJemawSchema = z.object({
+  jemawId: z.string().uuid(),
+  name: z.string().min(1, "Name is required").max(100),
+  description: z.string().max(500).optional(),
+  currency: z.enum(SUPPORTED_CURRENCIES),
 });
 
 const inviteMemberSchema = z.object({
@@ -32,13 +48,13 @@ export async function createJemaw(input: CreateJemawInput) {
 
   const validatedData = createJemawSchema.parse(input);
 
-  // Create jemaw and add creator as admin member
   const result = await db.transaction(async (tx) => {
     const [newJemaw] = await tx
       .insert(jemaws)
       .values({
         name: validatedData.name,
         description: validatedData.description || null,
+        currency: validatedData.currency,
         createdById: userId,
       })
       .returning();
@@ -56,11 +72,94 @@ export async function createJemaw(input: CreateJemawInput) {
   revalidatePath("/jemaws");
   revalidatePath("/dashboard");
 
-  return {
-    success: true,
-    jemaw: result,
-    message: "Group created successfully",
-  };
+  return { success: true, jemaw: result, message: "Group created successfully" };
+}
+
+export async function updateJemaw(input: z.infer<typeof updateJemawSchema>) {
+  const session = await requireAuth();
+  const userId = session.user.id;
+
+  const { jemawId, name, description, currency } = updateJemawSchema.parse(input);
+
+  const membership = await db.query.jemawMembers.findFirst({
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)),
+  });
+
+  if (!membership?.isAdmin) throw new Error("Only admins can edit this group");
+
+  await db
+    .update(jemaws)
+    .set({ name, description: description || null, currency, updatedAt: new Date() })
+    .where(eq(jemaws.id, jemawId));
+
+  revalidatePath(`/jemaws/${jemawId}`);
+  revalidatePath("/dashboard");
+
+  return { success: true, message: "Group updated successfully" };
+}
+
+export async function deleteJemaw({ jemawId }: { jemawId: string }) {
+  const session = await requireAuth();
+  const userId = session.user.id;
+
+  const membership = await db.query.jemawMembers.findFirst({
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)),
+  });
+
+  if (!membership?.isAdmin) throw new Error("Only admins can delete this group");
+
+  await db.delete(jemaws).where(eq(jemaws.id, jemawId));
+
+  revalidatePath("/dashboard");
+
+  return { success: true, message: "Group deleted successfully" };
+}
+
+export async function removeMember({ jemawId, userId: targetUserId }: { jemawId: string; userId: string }) {
+  const session = await requireAuth();
+  const adminId = session.user.id;
+
+  const adminMembership = await db.query.jemawMembers.findFirst({
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, adminId)),
+  });
+
+  if (!adminMembership?.isAdmin) throw new Error("Only admins can remove members");
+  if (adminId === targetUserId) throw new Error("Admins cannot remove themselves. Transfer admin rights first.");
+
+  await db
+    .delete(jemawMembers)
+    .where(and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, targetUserId)));
+
+  revalidatePath(`/jemaws/${jemawId}`);
+
+  return { success: true, message: "Member removed from group" };
+}
+
+export async function leaveJemaw({ jemawId }: { jemawId: string }) {
+  const session = await requireAuth();
+  const userId = session.user.id;
+
+  const membership = await db.query.jemawMembers.findFirst({
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)),
+  });
+
+  if (!membership) throw new Error("You are not a member of this group");
+  if (membership.isAdmin) {
+    const allMembers = await db.query.jemawMembers.findMany({
+      where: eq(jemawMembers.jemawId, jemawId),
+    });
+    if (allMembers.length > 1) {
+      throw new Error("Transfer admin rights to another member before leaving");
+    }
+  }
+
+  await db
+    .delete(jemawMembers)
+    .where(and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)));
+
+  revalidatePath("/dashboard");
+
+  return { success: true, message: "You have left the group" };
 }
 
 export async function inviteMember(input: InviteMemberInput) {
@@ -70,42 +169,27 @@ export async function inviteMember(input: InviteMemberInput) {
   const validatedData = inviteMemberSchema.parse(input);
   const { jemawId, email } = validatedData;
 
-  // Verify user is a member (preferably admin) of the jemaw
   const membership = await db.query.jemawMembers.findFirst({
-    where: and(
-      eq(jemawMembers.jemawId, jemawId),
-      eq(jemawMembers.userId, userId)
-    ),
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)),
   });
 
-  if (!membership) {
-    throw new Error("You are not a member of this group");
-  }
+  if (!membership) throw new Error("You are not a member of this group");
 
-  // Check if user with this email already exists and is a member
   const existingUser = await db.query.users.findFirst({
     where: eq(users.email, email),
   });
 
   if (existingUser) {
     const existingMembership = await db.query.jemawMembers.findFirst({
-      where: and(
-        eq(jemawMembers.jemawId, jemawId),
-        eq(jemawMembers.userId, existingUser.id)
-      ),
+      where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, existingUser.id)),
     });
-
-    if (existingMembership) {
-      throw new Error("This user is already a member of the group");
-    }
+    if (existingMembership) throw new Error("This user is already a member of the group");
   }
 
-  // Check if there's already a pending invitation for this email
   const existingInvitation = await db.query.jemawInvitations.findFirst({
     where: and(
       eq(jemawInvitations.jemawId, jemawId),
       eq(jemawInvitations.email, email),
-      // Not yet accepted
       eq(jemawInvitations.acceptedAt, null as unknown as Date)
     ),
   });
@@ -114,37 +198,20 @@ export async function inviteMember(input: InviteMemberInput) {
     throw new Error("An invitation has already been sent to this email");
   }
 
-  // Get jemaw and inviter info
-  const jemaw = await db.query.jemaws.findFirst({
-    where: eq(jemaws.id, jemawId),
-  });
+  const jemaw = await db.query.jemaws.findFirst({ where: eq(jemaws.id, jemawId) });
+  const inviter = await db.query.users.findFirst({ where: eq(users.id, userId) });
 
-  const inviter = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
+  if (!jemaw || !inviter) throw new Error("Group or user not found");
 
-  if (!jemaw || !inviter) {
-    throw new Error("Group or user not found");
-  }
-
-  // Create invitation token
   const token = uuidv4();
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+  expiresAt.setDate(expiresAt.getDate() + 7);
 
-  // Create invitation
   const [invitation] = await db
     .insert(jemawInvitations)
-    .values({
-      jemawId,
-      email,
-      invitedById: userId,
-      token,
-      expiresAt,
-    })
+    .values({ jemawId, email, invitedById: userId, token, expiresAt })
     .returning();
 
-  // Send invitation email
   await sendJemawInvitationEmail({
     to: email,
     inviterName: inviter.name,
@@ -154,61 +221,36 @@ export async function inviteMember(input: InviteMemberInput) {
 
   revalidatePath(`/jemaws/${jemawId}`);
 
-  return {
-    success: true,
-    invitation,
-    message: `Invitation sent to ${email}`,
-  };
+  return { success: true, invitation, message: `Invitation sent to ${email}` };
 }
 
 export async function acceptInvitation(input: { token: string }) {
   const session = await requireAuth();
   const userId = session.user.id;
 
-  const validatedData = acceptInvitationSchema.parse(input);
-  const { token } = validatedData;
+  const { token } = acceptInvitationSchema.parse(input);
 
-  // Find the invitation
   const invitation = await db.query.jemawInvitations.findFirst({
     where: eq(jemawInvitations.token, token),
-    with: {
-      jemaw: true,
-    },
+    with: { jemaw: true },
   });
 
-  if (!invitation) {
-    throw new Error("Invalid invitation");
-  }
+  if (!invitation) throw new Error("Invalid invitation");
+  if (invitation.acceptedAt) throw new Error("This invitation has already been used");
+  if (invitation.expiresAt < new Date()) throw new Error("This invitation has expired");
 
-  if (invitation.acceptedAt) {
-    throw new Error("This invitation has already been used");
-  }
-
-  if (invitation.expiresAt < new Date()) {
-    throw new Error("This invitation has expired");
-  }
-
-  // Check if user is already a member
   const existingMembership = await db.query.jemawMembers.findFirst({
-    where: and(
-      eq(jemawMembers.jemawId, invitation.jemawId),
-      eq(jemawMembers.userId, userId)
-    ),
+    where: and(eq(jemawMembers.jemawId, invitation.jemawId), eq(jemawMembers.userId, userId)),
   });
 
-  if (existingMembership) {
-    throw new Error("You are already a member of this group");
-  }
+  if (existingMembership) throw new Error("You are already a member of this group");
 
-  // Accept invitation and add as member
   await db.transaction(async (tx) => {
-    // Mark invitation as accepted
     await tx
       .update(jemawInvitations)
       .set({ acceptedAt: new Date() })
       .where(eq(jemawInvitations.id, invitation.id));
 
-    // Add user as member
     await tx.insert(jemawMembers).values({
       jemawId: invitation.jemawId,
       userId,
@@ -237,11 +279,7 @@ export async function getMyJemaws() {
     with: {
       jemaw: {
         with: {
-          members: {
-            with: {
-              user: true,
-            },
-          },
+          members: { with: { user: true } },
         },
       },
     },
@@ -258,53 +296,34 @@ export async function getJemawById(jemawId: string) {
   const session = await requireAuth();
   const userId = session.user.id;
 
-  // Verify membership
   const membership = await db.query.jemawMembers.findFirst({
-    where: and(
-      eq(jemawMembers.jemawId, jemawId),
-      eq(jemawMembers.userId, userId)
-    ),
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)),
   });
 
-  if (!membership) {
-    throw new Error("You are not a member of this group");
-  }
+  if (!membership) throw new Error("You are not a member of this group");
 
   const jemaw = await db.query.jemaws.findFirst({
     where: eq(jemaws.id, jemawId),
     with: {
       createdBy: true,
-      members: {
-        with: {
-          user: true,
-        },
-      },
+      members: { with: { user: true } },
       bills: {
         with: {
           paidBy: true,
-          splits: {
-            with: {
-              user: true,
-            },
-          },
+          splits: { with: { user: true } },
         },
         orderBy: (bills, { desc }) => [desc(bills.createdAt)],
-        limit: 10,
+        limit: 100,
       },
       settlements: {
-        with: {
-          payer: true,
-          receiver: true,
-        },
+        with: { payer: true, receiver: true },
         orderBy: (settlements, { desc }) => [desc(settlements.createdAt)],
-        limit: 10,
+        limit: 100,
       },
     },
   });
 
-  if (!jemaw) {
-    throw new Error("Group not found");
-  }
+  if (!jemaw) throw new Error("Group not found");
 
   return {
     ...jemaw,
@@ -313,12 +332,127 @@ export async function getJemawById(jemawId: string) {
   };
 }
 
+export async function getSuggestedSettlements(jemawId: string) {
+  const session = await requireAuth();
+  const userId = session.user.id;
+
+  const membership = await db.query.jemawMembers.findFirst({
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)),
+  });
+
+  if (!membership) throw new Error("You are not a member of this group");
+
+  const members = await db.query.jemawMembers.findMany({
+    where: eq(jemawMembers.jemawId, jemawId),
+    with: { user: true },
+  });
+
+  const balances = members.map((m) => ({
+    userId: m.userId,
+    name: m.user.name,
+    balance: parseFloat(m.balance),
+  }));
+
+  // Debt simplification: greedy minimum-transaction algorithm
+  const creditors = balances
+    .filter((b) => b.balance > 0.01)
+    .map((b) => ({ ...b }))
+    .sort((a, b) => b.balance - a.balance);
+  const debtors = balances
+    .filter((b) => b.balance < -0.01)
+    .map((b) => ({ ...b, balance: Math.abs(b.balance) }))
+    .sort((a, b) => b.balance - a.balance);
+
+  const suggestions: {
+    payerId: string;
+    payerName: string;
+    receiverId: string;
+    receiverName: string;
+    amount: string;
+  }[] = [];
+
+  let ci = 0;
+  let di = 0;
+
+  while (ci < creditors.length && di < debtors.length) {
+    const payment = Math.min(creditors[ci].balance, debtors[di].balance);
+    if (payment > 0.01) {
+      suggestions.push({
+        payerId: debtors[di].userId,
+        payerName: debtors[di].name,
+        receiverId: creditors[ci].userId,
+        receiverName: creditors[ci].name,
+        amount: payment.toFixed(2),
+      });
+    }
+    creditors[ci].balance -= payment;
+    debtors[di].balance -= payment;
+    if (creditors[ci].balance < 0.01) ci++;
+    if (debtors[di].balance < 0.01) di++;
+  }
+
+  return suggestions;
+}
+
+export async function getJemawStats(jemawId: string) {
+  const session = await requireAuth();
+  const userId = session.user.id;
+
+  const membership = await db.query.jemawMembers.findFirst({
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)),
+  });
+
+  if (!membership) throw new Error("You are not a member of this group");
+
+  const approvedBills = await db.query.bills.findMany({
+    where: and(eq(bills.jemawId, jemawId), eq(bills.status, "approved")),
+  });
+
+  const totalSpent = approvedBills.reduce((sum, b) => sum + parseFloat(b.amount), 0);
+
+  const categoryMap: Record<string, number> = {};
+  for (const bill of approvedBills) {
+    categoryMap[bill.category] = (categoryMap[bill.category] || 0) + parseFloat(bill.amount);
+  }
+  const byCategory = Object.entries(categoryMap)
+    .map(([category, total]) => ({ category, total: parseFloat(total.toFixed(2)) }))
+    .sort((a, b) => b.total - a.total);
+
+  const members = await db.query.jemawMembers.findMany({
+    where: eq(jemawMembers.jemawId, jemawId),
+    with: { user: true },
+  });
+
+  const memberBalances = members.map((m) => ({
+    name: m.user.name,
+    balance: parseFloat(m.balance),
+    userId: m.userId,
+  }));
+
+  let myShare = 0;
+  if (approvedBills.length > 0) {
+    const mySplits = await db.query.billSplits.findMany({
+      where: and(
+        eq(billSplits.userId, userId),
+        inArray(billSplits.billId, approvedBills.map((b) => b.id))
+      ),
+    });
+    myShare = mySplits.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+  }
+
+  return {
+    totalSpent: parseFloat(totalSpent.toFixed(2)),
+    byCategory,
+    memberBalances,
+    myShare: parseFloat(myShare.toFixed(2)),
+    myBalance: parseFloat(membership.balance),
+  };
+}
+
 export async function getInvitationByToken(token: string) {
   const invitation = await db.query.jemawInvitations.findFirst({
     where: eq(jemawInvitations.token, token),
-    with: {
-      jemaw: true,
-    },
+    with: { jemaw: true },
   });
 
   if (!invitation) return null;
@@ -334,24 +468,14 @@ export async function getJemawMembers(jemawId: string) {
   const session = await requireAuth();
   const userId = session.user.id;
 
-  // Verify membership
   const membership = await db.query.jemawMembers.findFirst({
-    where: and(
-      eq(jemawMembers.jemawId, jemawId),
-      eq(jemawMembers.userId, userId)
-    ),
+    where: and(eq(jemawMembers.jemawId, jemawId), eq(jemawMembers.userId, userId)),
   });
 
-  if (!membership) {
-    throw new Error("You are not a member of this group");
-  }
+  if (!membership) throw new Error("You are not a member of this group");
 
-  const members = await db.query.jemawMembers.findMany({
+  return db.query.jemawMembers.findMany({
     where: eq(jemawMembers.jemawId, jemawId),
-    with: {
-      user: true,
-    },
+    with: { user: true },
   });
-
-  return members;
 }

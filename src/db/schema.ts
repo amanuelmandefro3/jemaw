@@ -97,6 +97,7 @@ export const jemaws = pgTable("jemaws", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   description: text("description"),
+  currency: text("currency").notNull().default("USD"),
   createdById: text("created_by_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -167,6 +168,7 @@ export const bills = pgTable(
     status: billStatusEnum("status").notNull().default("pending"),
     approvedById: text("approved_by_id").references(() => users.id),
     approvedAt: timestamp("approved_at"),
+    receiptUrl: text("receipt_url"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -228,6 +230,47 @@ export const settlements = pgTable(
   ]
 );
 
+// Activity Logs
+export const activityLogs = pgTable(
+  "activity_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    jemawId: uuid("jemaw_id")
+      .notNull()
+      .references(() => jemaws.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    targetType: text("target_type").notNull(),
+    targetId: text("target_id").notNull(),
+    metadata: text("metadata"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("activity_logs_jemaw_idx").on(table.jemawId),
+    index("activity_logs_user_idx").on(table.userId),
+  ]
+);
+
+// Notifications
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    message: text("message").notNull(),
+    link: text("link").notNull(),
+    read: boolean("read").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("notifications_user_idx").on(table.userId),
+  ]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
@@ -240,6 +283,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   sentSettlements: many(settlements, { relationName: "payer" }),
   receivedSettlements: many(settlements, { relationName: "receiver" }),
   sentInvitations: many(jemawInvitations),
+  activityLogs: many(activityLogs),
+  notifications: many(notifications),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -265,6 +310,7 @@ export const jemawsRelations = relations(jemaws, ({ one, many }) => ({
   bills: many(bills),
   settlements: many(settlements),
   invitations: many(jemawInvitations),
+  activityLogs: many(activityLogs),
 }));
 
 export const jemawMembersRelations = relations(jemawMembers, ({ one }) => ({
@@ -338,6 +384,24 @@ export const settlementsRelations = relations(settlements, ({ one }) => ({
   }),
 }));
 
+export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
+  jemaw: one(jemaws, {
+    fields: [activityLogs.jemawId],
+    references: [jemaws.id],
+  }),
+  user: one(users, {
+    fields: [activityLogs.userId],
+    references: [users.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+}));
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -353,6 +417,9 @@ export type BillSplit = typeof billSplits.$inferSelect;
 export type NewBillSplit = typeof billSplits.$inferInsert;
 export type Settlement = typeof settlements.$inferSelect;
 export type NewSettlement = typeof settlements.$inferInsert;
+
+export type ActivityLog = typeof activityLogs.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 
 export type BillStatus = "pending" | "approved" | "rejected";
 export type SettlementStatus = "pending" | "approved" | "rejected";

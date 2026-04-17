@@ -36,6 +36,7 @@ export default async function NewBillPage({
         jemawId={id}
         members={jemaw.members}
         currentUserId={currentUserId}
+        currency={jemaw.currency}
       />
     </div>
   );

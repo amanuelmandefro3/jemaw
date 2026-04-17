@@ -8,7 +8,6 @@ import { approveSettlement, rejectSettlement } from "@/actions/settlements";
 import { removeMember, leaveJemaw } from "@/actions/jemaws";
 import { getJemawActivity } from "@/actions/activity";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -27,8 +26,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { formatCurrency } from "@/lib/utils";
-import { Check, X, ArrowRight, AlertCircle, Search, Clock, UserMinus, LogOut } from "lucide-react";
+import { formatCurrency, cn } from "@/lib/utils";
+import { Check, X, ArrowRight, AlertCircle, Search, Clock, UserMinus, LogOut, Receipt, ArrowLeftRight } from "lucide-react";
 
 type Member = {
   userId: string;
@@ -86,12 +85,25 @@ type ActivityLog = {
   user: { id: string; name: string };
 };
 
-function statusBadge(status: string) {
-  if (status === "approved")
-    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Approved</Badge>;
-  if (status === "rejected")
-    return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Rejected</Badge>;
-  return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Pending</Badge>;
+const CATEGORY_COLORS: Record<string, string> = {
+  breakfast: "bg-amber-400",
+  lunch: "bg-orange-400",
+  dinner: "bg-rose-400",
+  groceries: "bg-emerald-400",
+  transportation: "bg-sky-400",
+  utilities: "bg-violet-400",
+  rent: "bg-indigo-400",
+  entertainment: "bg-pink-400",
+  vacation: "bg-cyan-400",
+  shopping: "bg-fuchsia-400",
+  healthcare: "bg-red-400",
+  other: "bg-slate-300",
+};
+
+function statusText(status: string) {
+  if (status === "approved") return <span className="text-emerald-600 text-xs font-medium">Approved</span>;
+  if (status === "rejected") return <span className="text-rose-600 text-xs font-medium">Rejected</span>;
+  return <span className="text-amber-600 text-xs font-medium">Pending</span>;
 }
 
 function initials(name: string) {
@@ -155,69 +167,62 @@ function MembersTab({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       {members.map((m) => {
         const bal = parseFloat(m.balance);
         const isMe = m.userId === currentUserId;
         return (
-          <div key={m.userId} className="flex items-center gap-3 p-3 rounded-lg border">
-            <Avatar className="w-9 h-9">
-              <AvatarFallback className="text-xs">{initials(m.user.name)}</AvatarFallback>
+          <div key={m.userId} className="flex items-center px-5 py-3.5 border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors">
+            <Avatar className="w-8 h-8 mr-3 shrink-0">
+              <AvatarFallback className="text-xs bg-indigo-100 text-indigo-700 font-semibold">{initials(m.user.name)}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{m.user.name}</span>
-                {m.isAdmin && <Badge variant="secondary" className="text-xs py-0">Admin</Badge>}
-                {isMe && <span className="text-xs text-muted-foreground">(you)</span>}
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium text-slate-900 truncate">{m.user.name}</span>
+                {m.isAdmin && <span className="text-[10px] text-indigo-600 font-medium">Admin</span>}
+                {isMe && <span className="text-[10px] text-slate-400">(you)</span>}
               </div>
-              <p className="text-xs text-muted-foreground truncate">{m.user.email}</p>
+              <p className="text-xs text-slate-400 truncate">{m.user.email}</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="text-sm font-medium">
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-sm font-semibold">
                 {bal === 0 ? (
-                  <span className="text-muted-foreground">Settled</span>
+                  <span className="text-slate-400 font-normal text-xs">Settled</span>
                 ) : bal > 0 ? (
-                  <span className="text-green-600">+{formatCurrency(bal, currency)}</span>
+                  <span className="text-emerald-600">+{formatCurrency(bal, currency)}</span>
                 ) : (
-                  <span className="text-red-600">-{formatCurrency(Math.abs(bal), currency)}</span>
+                  <span className="text-rose-500">−{formatCurrency(Math.abs(bal), currency)}</span>
                 )}
-              </div>
+              </span>
               {isAdmin && !isMe && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-muted-foreground hover:text-destructive h-7 px-2"
+                <button
+                  className="text-slate-300 hover:text-rose-500 transition-colors"
                   disabled={isPending}
                   onClick={() => handleRemove(m.userId)}
+                  title="Remove member"
                 >
                   <UserMinus className="w-3.5 h-3.5" />
-                </Button>
+                </button>
               )}
             </div>
           </div>
         );
       })}
 
-      {/* Leave group button for non-admins */}
       {!isAdmin && (
-        <div className="pt-2">
+        <div className="px-5 py-3 border-t border-slate-100">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="text-destructive border-destructive/40 hover:bg-destructive/10"
+            className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-7 text-xs"
             disabled={isPending}
             onClick={handleLeave}
           >
             <LogOut className="w-3.5 h-3.5 mr-1.5" />
-            {confirmLeave ? "Click again to confirm" : "Leave group"}
+            {confirmLeave ? "Click again to confirm leaving" : "Leave group"}
           </Button>
           {confirmLeave && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-2"
-              onClick={() => setConfirmLeave(false)}
-            >
+            <Button variant="ghost" size="sm" className="ml-1 h-7 text-xs" onClick={() => setConfirmLeave(false)}>
               Cancel
             </Button>
           )}
@@ -272,17 +277,12 @@ function BillsTab({
   const hasFilters = catFilter !== "all" || statusFilter !== "all" || search;
 
   return (
-    <div className="space-y-3">
+    <div>
       {/* Filter bar */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 mb-3">
         <div className="relative flex-1 min-w-[160px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Search bills…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-sm"
-          />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Input placeholder="Search bills…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-sm" />
         </div>
         <Select value={catFilter} onValueChange={setCatFilter}>
           <SelectTrigger className="h-8 text-sm w-[130px]">
@@ -308,93 +308,82 @@ function BillsTab({
           </SelectContent>
         </Select>
         {hasFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => { setSearch(""); setCatFilter("all"); setStatusFilter("all"); }}
-          >
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSearch(""); setCatFilter("all"); setStatusFilter("all"); }}>
             Clear
           </Button>
         )}
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="text-center text-muted-foreground py-10 text-sm">
-          {bills.length === 0 ? "No bills yet. Add one to get started." : "No bills match your filters."}
-        </p>
-      ) : (
-        filtered.map((bill) => {
-          const isInSplit = bill.splits.some((s) => s.userId === currentUserId);
-          const isPayer = bill.paidBy.id === currentUserId;
-          const canAct = bill.status === "pending" && isInSplit && !isPayer;
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="py-14 text-center">
+            <Receipt className="w-8 h-8 text-slate-200 mx-auto mb-3" />
+            <p className="text-sm text-slate-400">
+              {bills.length === 0 ? "No bills yet. Add one to get started." : "No bills match your filters."}
+            </p>
+          </div>
+        ) : (
+          filtered.map((bill) => {
+            const isInSplit = bill.splits.some((s) => s.userId === currentUserId);
+            const isPayer = bill.paidBy.id === currentUserId;
+            const canAct = bill.status === "pending" && isInSplit && !isPayer;
+            const dotColor = CATEGORY_COLORS[bill.category] ?? "bg-slate-300";
 
-          return (
-            <div key={bill.id} className="p-4 rounded-lg border space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{bill.description}</span>
-                    <Badge variant="outline" className="text-xs capitalize">{bill.category}</Badge>
-                    {statusBadge(bill.status)}
+            return (
+              <div key={bill.id} className="border-b border-slate-100 last:border-0">
+                <div className="flex items-center px-5 py-4 hover:bg-slate-50/60 transition-colors">
+                  {/* Category dot */}
+                  <div className={cn("w-2 h-2 rounded-full mr-4 shrink-0", dotColor)} />
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">{bill.description}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-slate-400 capitalize">{bill.category}</span>
+                      <span className="text-slate-200 text-xs">·</span>
+                      <span className="text-xs text-slate-400">paid by {bill.paidBy.name}</span>
+                      <span className="text-slate-200 text-xs">·</span>
+                      <span className="text-xs text-slate-400">{new Date(bill.createdAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Paid by {bill.paidBy.name} · {new Date(bill.createdAt).toLocaleDateString()}
-                  </p>
+
+                  {/* Right side */}
+                  <div className="text-right shrink-0 ml-4">
+                    <p className="text-sm font-semibold text-slate-900">{formatCurrency(bill.amount, currency)}</p>
+                    {statusText(bill.status)}
+                  </div>
                 </div>
-                <span className="font-semibold text-sm shrink-0">
-                  {formatCurrency(bill.amount, currency)}
-                </span>
+
+                {/* Receipt + actions */}
+                {(bill.receiptUrl || canAct) && (
+                  <div className={cn("px-5 pb-4 space-y-3", !bill.receiptUrl && "pt-0")}>
+                    {bill.receiptUrl && (
+                      <a href={bill.receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={bill.receiptUrl}
+                          alt="Receipt"
+                          className="rounded-lg border border-slate-200 max-h-36 object-contain bg-slate-50 hover:opacity-90 transition-opacity cursor-zoom-in"
+                        />
+                      </a>
+                    )}
+                    {canAct && (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50" disabled={isPending} onClick={() => handleBill("approve", bill.id)}>
+                          <Check className="w-3 h-3 mr-1" /> Approve
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-rose-600 border-rose-200 hover:bg-rose-50" disabled={isPending} onClick={() => handleBill("reject", bill.id)}>
+                          <X className="w-3 h-3 mr-1" /> Reject
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-
-              {bill.splits.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Split between: {bill.splits.map((s) => s.user.name).join(", ")}
-                </p>
-              )}
-
-              {bill.receiptUrl && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">Receipt</p>
-                  <a href={bill.receiptUrl} target="_blank" rel="noopener noreferrer">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={bill.receiptUrl}
-                      alt="Receipt"
-                      className="rounded-md border max-h-40 object-contain bg-muted w-full hover:opacity-90 transition-opacity cursor-zoom-in"
-                    />
-                  </a>
-                </div>
-              )}
-
-              {canAct && (
-                <div className="flex gap-2 pt-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-green-700 border-green-300 hover:bg-green-50"
-                    disabled={isPending}
-                    onClick={() => handleBill("approve", bill.id)}
-                  >
-                    <Check className="w-3.5 h-3.5 mr-1" />
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-red-700 border-red-300 hover:bg-red-50"
-                    disabled={isPending}
-                    onClick={() => handleBill("reject", bill.id)}
-                  >
-                    <X className="w-3.5 h-3.5 mr-1" />
-                    Reject
-                  </Button>
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -447,11 +436,7 @@ function SettlementsTab({
       if (statusFilter !== "all" && s.status !== statusFilter) return false;
       if (search) {
         const q = search.toLowerCase();
-        if (
-          !s.payer.name.toLowerCase().includes(q) &&
-          !s.receiver.name.toLowerCase().includes(q) &&
-          !(s.description?.toLowerCase().includes(q))
-        ) return false;
+        if (!s.payer.name.toLowerCase().includes(q) && !s.receiver.name.toLowerCase().includes(q) && !(s.description?.toLowerCase().includes(q))) return false;
       }
       return true;
     });
@@ -459,136 +444,109 @@ function SettlementsTab({
 
   const hasFilters = statusFilter !== "all" || search;
 
-  if (settlements.length === 0) {
-    return <p className="text-center text-muted-foreground py-10 text-sm">No settlements yet.</p>;
-  }
-
   return (
     <>
-      {/* Filter bar */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        <div className="relative flex-1 min-w-[160px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Search…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-sm"
-          />
+      {settlements.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          <div className="relative flex-1 min-w-[160px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Input placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-sm" />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-8 text-sm w-[120px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSearch(""); setStatusFilter("all"); }}>
+              Clear
+            </Button>
+          )}
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-8 text-sm w-[120px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
-        {hasFilters && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSearch(""); setStatusFilter("all"); }}>
-            Clear
-          </Button>
-        )}
-      </div>
+      )}
 
-      {filtered.length === 0 ? (
-        <p className="text-center text-muted-foreground py-10 text-sm">No settlements match your filters.</p>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map((s) => {
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="py-14 text-center">
+            <ArrowLeftRight className="w-8 h-8 text-slate-200 mx-auto mb-3" />
+            <p className="text-sm text-slate-400">
+              {settlements.length === 0 ? "No settlements yet." : "No settlements match your filters."}
+            </p>
+          </div>
+        ) : (
+          filtered.map((s) => {
             const isReceiver = s.receiver.id === currentUserId;
             const canAct = s.status === "pending" && isReceiver;
 
             return (
-              <div key={s.id} className="p-4 rounded-lg border space-y-3">
-                <div className="flex items-start justify-between gap-3">
+              <div key={s.id} className="border-b border-slate-100 last:border-0">
+                <div className="flex items-center px-5 py-4 hover:bg-slate-50/60 transition-colors">
+                  <div className="w-2 h-2 rounded-full bg-indigo-300 mr-4 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{s.payer.name}</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <span className="text-sm font-medium">{s.receiver.name}</span>
-                      {statusBadge(s.status)}
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-medium text-slate-900">{s.payer.name}</span>
+                      <ArrowRight className="w-3 h-3 text-slate-300 shrink-0" />
+                      <span className="font-medium text-slate-900">{s.receiver.name}</span>
                     </div>
-                    {s.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(s.createdAt).toLocaleDateString()}
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {s.description && <span className="text-xs text-slate-400 truncate">{s.description}</span>}
+                      {s.description && <span className="text-slate-200 text-xs">·</span>}
+                      <span className="text-xs text-slate-400">{new Date(s.createdAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
-                  <span className="font-semibold text-sm shrink-0">
-                    {formatCurrency(s.amount, currency)}
-                  </span>
+                  <div className="text-right shrink-0 ml-4">
+                    <p className="text-sm font-semibold text-slate-900">{formatCurrency(s.amount, currency)}</p>
+                    {statusText(s.status)}
+                  </div>
                 </div>
 
-                {s.paymentProofUrl && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">Payment proof</p>
-                    <a href={s.paymentProofUrl} target="_blank" rel="noopener noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={s.paymentProofUrl}
-                        alt="Payment proof"
-                        className="rounded-md border max-h-48 object-contain bg-muted w-full hover:opacity-90 transition-opacity cursor-zoom-in"
-                      />
-                    </a>
-                    <p className="text-xs text-muted-foreground">Click to view full size</p>
-                  </div>
-                )}
-
-                {s.status === "rejected" && s.rejectionReason && (
-                  <div className="flex gap-2 p-3 rounded-md bg-red-50 border border-red-200">
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-medium text-red-700">Rejection reason</p>
-                      <p className="text-xs text-red-600 mt-0.5">{s.rejectionReason}</p>
-                    </div>
-                  </div>
-                )}
-
-                {canAct && (
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-green-700 border-green-300 hover:bg-green-50"
-                      disabled={isPending}
-                      onClick={() => handleApprove(s.id)}
-                    >
-                      <Check className="w-3.5 h-3.5 mr-1" />
-                      Confirm received
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-700 border-red-300 hover:bg-red-50"
-                      disabled={isPending}
-                      onClick={() => { setRejectTarget(s.id); setRejectReason(""); }}
-                    >
-                      <X className="w-3.5 h-3.5 mr-1" />
-                      Reject
-                    </Button>
+                {(s.paymentProofUrl || s.rejectionReason || canAct) && (
+                  <div className="px-5 pb-4 space-y-3">
+                    {s.paymentProofUrl && (
+                      <a href={s.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={s.paymentProofUrl}
+                          alt="Payment proof"
+                          className="rounded-lg border border-slate-200 max-h-36 object-contain bg-slate-50 hover:opacity-90 transition-opacity cursor-zoom-in"
+                        />
+                      </a>
+                    )}
+                    {s.status === "rejected" && s.rejectionReason && (
+                      <div className="flex gap-2 p-3 rounded-lg bg-rose-50 border border-rose-100">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                        <p className="text-xs text-rose-600">{s.rejectionReason}</p>
+                      </div>
+                    )}
+                    {canAct && (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50" disabled={isPending} onClick={() => handleApprove(s.id)}>
+                          <Check className="w-3 h-3 mr-1" /> Confirm received
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-rose-600 border-rose-200 hover:bg-rose-50" disabled={isPending} onClick={() => { setRejectTarget(s.id); setRejectReason(""); }}>
+                          <X className="w-3 h-3 mr-1" /> Reject
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
-      <Dialog
-        open={!!rejectTarget}
-        onOpenChange={(open) => { if (!open) { setRejectTarget(null); setRejectReason(""); } }}
-      >
+      <Dialog open={!!rejectTarget} onOpenChange={(open) => { if (!open) { setRejectTarget(null); setRejectReason(""); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Reject settlement</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              The payer will see your reason. Be specific so they know what to fix.
-            </p>
+            <p className="text-sm text-slate-500">The payer will see your reason. Be specific so they know what to fix.</p>
             <Textarea
               placeholder="e.g. Screenshot doesn't match amount, payment wasn't received..."
               value={rejectReason}
@@ -598,9 +556,7 @@ function SettlementsTab({
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setRejectTarget(null); setRejectReason(""); }} disabled={isPending}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => { setRejectTarget(null); setRejectReason(""); }} disabled={isPending}>Cancel</Button>
             <Button variant="destructive" onClick={handleRejectConfirm} disabled={isPending || !rejectReason.trim()}>
               {isPending ? "Rejecting…" : "Confirm rejection"}
             </Button>
@@ -624,7 +580,7 @@ function ActivityTab({ jemawId }: { jemawId: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center text-sm">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm py-12 flex items-center justify-center gap-2 text-slate-400 text-sm">
         <Clock className="w-4 h-4 animate-spin" />
         Loading activity…
       </div>
@@ -633,27 +589,28 @@ function ActivityTab({ jemawId }: { jemawId: string }) {
 
   if (!logs || logs.length === 0) {
     return (
-      <p className="text-center text-muted-foreground py-10 text-sm">
-        No activity recorded yet.
-      </p>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm py-14 text-center">
+        <Clock className="w-8 h-8 text-slate-200 mx-auto mb-3" />
+        <p className="text-sm text-slate-400">No activity recorded yet.</p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-1">
-      {logs.map((log) => (
-        <div key={log.id} className="flex items-start gap-3 py-2 border-b last:border-0">
-          <Avatar className="w-7 h-7 mt-0.5 shrink-0">
-            <AvatarFallback className="text-xs">{initials(log.user.name)}</AvatarFallback>
-          </Avatar>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {logs.map((log, i) => (
+        <div key={log.id} className="flex items-start px-5 py-4 border-b border-slate-100 last:border-0 gap-3">
+          {/* Timeline dot + line */}
+          <div className="flex flex-col items-center shrink-0 mt-1">
+            <div className="w-2 h-2 rounded-full bg-indigo-400" />
+            {i < logs.length - 1 && <div className="w-px flex-1 bg-slate-100 mt-1 min-h-[20px]" />}
+          </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm">
-              <span className="font-medium">{log.user.name}</span>{" "}
-              <span className="text-muted-foreground">{actionLabel(log.action, log.metadata)}</span>
+            <p className="text-sm text-slate-700">
+              <span className="font-medium text-slate-900">{log.user.name}</span>{" "}
+              {actionLabel(log.action, log.metadata)}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {new Date(log.createdAt).toLocaleString()}
-            </p>
+            <p className="text-xs text-slate-400 mt-0.5">{new Date(log.createdAt).toLocaleString()}</p>
           </div>
         </div>
       ))}
@@ -669,13 +626,28 @@ export function JemawTabs({
   currentUserId: string;
 }) {
   return (
-    <Tabs defaultValue="members">
-      <TabsList className="mb-4">
-        <TabsTrigger value="members">Members ({jemaw.members.length})</TabsTrigger>
-        <TabsTrigger value="bills">Bills ({jemaw.bills.length})</TabsTrigger>
-        <TabsTrigger value="settlements">Settlements ({jemaw.settlements.length})</TabsTrigger>
-        <TabsTrigger value="activity">Activity</TabsTrigger>
+    <Tabs defaultValue="bills">
+      <TabsList className="mb-4 bg-slate-100 p-0.5 rounded-xl h-9">
+        <TabsTrigger value="bills" className="text-xs rounded-lg h-8 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          Bills {jemaw.bills.length > 0 && <span className="ml-1 text-slate-400 font-normal">{jemaw.bills.length}</span>}
+        </TabsTrigger>
+        <TabsTrigger value="settlements" className="text-xs rounded-lg h-8 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          Settlements {jemaw.settlements.length > 0 && <span className="ml-1 text-slate-400 font-normal">{jemaw.settlements.length}</span>}
+        </TabsTrigger>
+        <TabsTrigger value="members" className="text-xs rounded-lg h-8 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          Members {jemaw.members.length > 0 && <span className="ml-1 text-slate-400 font-normal">{jemaw.members.length}</span>}
+        </TabsTrigger>
+        <TabsTrigger value="activity" className="text-xs rounded-lg h-8 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          Activity
+        </TabsTrigger>
       </TabsList>
+
+      <TabsContent value="bills">
+        <BillsTab bills={jemaw.bills} currentUserId={currentUserId} currency={jemaw.currency} />
+      </TabsContent>
+      <TabsContent value="settlements">
+        <SettlementsTab settlements={jemaw.settlements} currentUserId={currentUserId} currency={jemaw.currency} />
+      </TabsContent>
       <TabsContent value="members">
         <MembersTab
           members={jemaw.members}
@@ -684,12 +656,6 @@ export function JemawTabs({
           isAdmin={jemaw.isAdmin}
           jemawId={jemaw.id}
         />
-      </TabsContent>
-      <TabsContent value="bills">
-        <BillsTab bills={jemaw.bills} currentUserId={currentUserId} currency={jemaw.currency} />
-      </TabsContent>
-      <TabsContent value="settlements">
-        <SettlementsTab settlements={jemaw.settlements} currentUserId={currentUserId} currency={jemaw.currency} />
       </TabsContent>
       <TabsContent value="activity">
         <ActivityTab jemawId={jemaw.id} />

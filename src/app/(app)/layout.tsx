@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/session";
-import { Sidebar } from "./sidebar";
+import { Header } from "./header";
 
 export default async function AppLayout({
   children,
@@ -22,9 +22,9 @@ export default async function AppLayout({
   };
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar user={user} />
-      <main className="flex-1 overflow-auto">{children}</main>
+    <div className="min-h-screen bg-slate-50">
+      <Header user={user} />
+      <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
     </div>
   );
 }

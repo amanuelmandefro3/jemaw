@@ -139,7 +139,7 @@ export async function createBill(input: CreateBillInput) {
       jemawId,
       jemawName: jemaw?.name || "Unknown Group",
       description,
-      amount: formatCurrency(amount),
+      amount: formatCurrency(amount, jemaw?.currency || "USD"),
       paidByName: payer?.name || "Someone",
       eligibleApprovers: approvers.map((a) => ({
         email: a.email,

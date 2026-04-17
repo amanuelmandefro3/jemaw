@@ -26,45 +26,44 @@ export default async function JemawPage({
 
   const session = await getServerSession();
   const currentUserId = session!.user.id;
-
   const balance = parseFloat(jemaw.myBalance);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Back to groups
-        </Link>
+    <div>
+      {/* Breadcrumb */}
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 mb-6 transition-colors"
+      >
+        <ArrowLeft className="w-3 h-3" />
+        All groups
+      </Link>
+
+      {/* Group header */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-6">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{jemaw.name}</h1>
-              <span className="text-sm text-muted-foreground font-mono border rounded px-1.5 py-0.5">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-xl font-bold text-slate-900 truncate">{jemaw.name}</h1>
+              <span className="text-xs font-mono text-slate-400 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded shrink-0">
                 {jemaw.currency}
               </span>
             </div>
             {jemaw.description && (
-              <p className="text-muted-foreground text-sm mt-1">{jemaw.description}</p>
+              <p className="text-sm text-slate-500 mb-3">{jemaw.description}</p>
             )}
-            <div className="mt-2 text-sm font-medium">
+            <p className="text-sm font-semibold">
               {balance === 0 ? (
-                <span className="text-muted-foreground">You are settled up</span>
+                <span className="text-slate-400">Settled up</span>
               ) : balance > 0 ? (
-                <span className="text-green-600">
-                  You are owed {formatCurrency(balance, jemaw.currency)}
-                </span>
+                <span className="text-emerald-600">+{formatCurrency(balance, jemaw.currency)} owed to you</span>
               ) : (
-                <span className="text-red-600">
-                  You owe {formatCurrency(Math.abs(balance), jemaw.currency)}
-                </span>
+                <span className="text-rose-600">You owe {formatCurrency(Math.abs(balance), jemaw.currency)}</span>
               )}
-            </div>
+            </p>
           </div>
-          <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+
+          <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
             {jemaw.isAdmin && (
               <EditJemawDialog
                 jemawId={id}
@@ -72,33 +71,33 @@ export default async function JemawPage({
                 initialDescription={jemaw.description}
                 initialCurrency={jemaw.currency}
               >
-                <Button variant="outline" size="sm">
-                  <Settings className="w-4 h-4 mr-1.5" />
+                <Button variant="outline" size="sm" className="h-8 text-xs">
+                  <Settings className="w-3.5 h-3.5 mr-1.5" />
                   Edit
                 </Button>
               </EditJemawDialog>
             )}
             <Link href={`/jemaws/${id}/stats`}>
-              <Button variant="outline" size="sm">
-                <BarChart2 className="w-4 h-4 mr-1.5" />
+              <Button variant="outline" size="sm" className="h-8 text-xs">
+                <BarChart2 className="w-3.5 h-3.5 mr-1.5" />
                 Stats
               </Button>
             </Link>
             <InviteMemberDialog jemawId={id}>
-              <Button variant="outline" size="sm">
-                <UserPlus className="w-4 h-4 mr-1.5" />
+              <Button variant="outline" size="sm" className="h-8 text-xs">
+                <UserPlus className="w-3.5 h-3.5 mr-1.5" />
                 Invite
               </Button>
             </InviteMemberDialog>
             <SettleUpDialog jemawId={id} currency={jemaw.currency}>
-              <Button variant="outline" size="sm">
-                <ArrowLeftRight className="w-4 h-4 mr-1.5" />
+              <Button variant="outline" size="sm" className="h-8 text-xs">
+                <ArrowLeftRight className="w-3.5 h-3.5 mr-1.5" />
                 Settle up
               </Button>
             </SettleUpDialog>
             <Link href={`/jemaws/${id}/bills/new`}>
-              <Button size="sm">
-                <Plus className="w-4 h-4 mr-1.5" />
+              <Button size="sm" className="h-8 text-xs">
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
                 Add bill
               </Button>
             </Link>

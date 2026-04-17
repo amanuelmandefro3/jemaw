@@ -146,6 +146,17 @@ export async function createBill(input: CreateBillInput) {
         name: a.name,
       })),
     }).catch(console.error);
+
+    // Push in-app notifications to each approver (fire and forget)
+    Promise.all(
+      eligibleApproverIds.map((approverId) =>
+        createNotification({
+          userId: approverId,
+          message: `${payer?.name ?? "Someone"} added a bill "${description}" (${formatCurrency(amount, jemaw?.currency || "USD")}) — your approval needed`,
+          link: `/pending`,
+        })
+      )
+    ).catch(console.error);
   }
 
   revalidatePath(`/jemaws/${jemawId}`);

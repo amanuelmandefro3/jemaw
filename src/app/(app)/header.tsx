@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SplitSquareVertical, Bell, Check, LogOut, User } from "lucide-react";
 import { signOut } from "@/lib/auth-client";
-import { getNotifications, markAsRead, markAllAsRead } from "@/actions/notifications";
+import { markAsRead, markAllAsRead } from "@/actions/notifications";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -39,9 +39,38 @@ export function Header({ user }: HeaderProps) {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [bellFlash, setBellFlash] = useState(false);
 
   useEffect(() => {
-    getNotifications().then((data) => setNotifications(data as Notification[])).catch(() => {});
+    const source = new EventSource("/api/notifications/stream");
+
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data as string) as {
+          type: string;
+          notifications: (Omit<Notification, "createdAt"> & { createdAt: string })[];
+        };
+
+        // Normalise createdAt strings → Date objects
+        const parse = (list: typeof data.notifications): Notification[] =>
+          list.map((n) => ({ ...n, createdAt: new Date(n.createdAt) }));
+
+        if (data.type === "init") {
+          setNotifications(parse(data.notifications));
+        } else if (data.type === "new") {
+          setNotifications((prev) => {
+            const existingIds = new Set(prev.map((n) => n.id));
+            const incoming = parse(data.notifications).filter((n) => !existingIds.has(n.id));
+            if (incoming.length === 0) return prev;
+            setBellFlash(true);
+            setTimeout(() => setBellFlash(false), 1000);
+            return [...incoming, ...prev].slice(0, 20);
+          });
+        }
+      } catch { /* ignore malformed events */ }
+    };
+
+    return () => source.close();
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -101,11 +130,6 @@ export function Header({ user }: HeaderProps) {
                 )}
               >
                 {label}
-                {href === "/pending" && unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-indigo-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold leading-none">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
               </Link>
             );
           })}
@@ -116,8 +140,11 @@ export function Header({ user }: HeaderProps) {
           {/* Notifications */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="relative w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
-                <Bell className="w-4 h-4" />
+              <button className={cn(
+                "relative w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors",
+                bellFlash && "text-indigo-500"
+              )}>
+                <Bell className={cn("w-4 h-4 transition-transform", bellFlash && "animate-bounce")} />
                 {unreadCount > 0 && (
                   <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full" />
                 )}

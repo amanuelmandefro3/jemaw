@@ -90,7 +90,8 @@ export function PendingItems({
   }
 
   function handleConfirmReject() {
-    if (!rejectTarget || !rejectReason.trim()) return;
+    if (!rejectTarget) return;
+    if (rejectTarget.type === "settlement" && !rejectReason.trim()) return;
     startTransition(async () => {
       try {
         if (rejectTarget.type === "bill") {

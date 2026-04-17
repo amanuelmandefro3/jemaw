@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
               gt(notifications.createdAt, checkFrom)
             ),
             orderBy: (n, { desc }) => [desc(n.createdAt)],
+            limit: 20,
           });
 
           if (fresh.length > 0) {

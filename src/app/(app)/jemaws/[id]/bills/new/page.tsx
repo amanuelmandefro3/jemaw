@@ -23,21 +23,26 @@ export default async function NewBillPage({
   const currentUserId = session!.user.id;
 
   return (
-    <div className="p-6 max-w-lg mx-auto">
+    <div className="max-w-lg">
       <Link
         href={`/jemaws/${id}`}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 mb-6 transition-colors"
       >
-        <ArrowLeft className="w-3.5 h-3.5" />
+        <ArrowLeft className="w-3 h-3" />
         Back to {jemaw.name}
       </Link>
-      <h1 className="text-xl font-bold mb-6">Add a bill</h1>
-      <CreateBillForm
-        jemawId={id}
-        members={jemaw.members}
-        currentUserId={currentUserId}
-        currency={jemaw.currency}
-      />
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-900">Add a bill</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Split an expense with group members</p>
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <CreateBillForm
+          jemawId={id}
+          members={jemaw.members}
+          currentUserId={currentUserId}
+          currency={jemaw.currency}
+        />
+      </div>
     </div>
   );
 }

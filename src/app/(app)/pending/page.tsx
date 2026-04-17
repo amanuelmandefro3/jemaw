@@ -9,12 +9,10 @@ export default async function PendingPage() {
   ]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Pending Approvals</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Items waiting for your review
-        </p>
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-900">Pending Approvals</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Items waiting for your review</p>
       </div>
       <PendingItems pendingBills={pendingBills} pendingSettlements={pendingSettlements} />
     </div>

@@ -28,22 +28,27 @@ export default async function NewSettlementPage({
   const otherMembers = jemaw.members.filter((m) => m.userId !== currentUserId);
 
   return (
-    <div className="p-6 max-w-lg mx-auto">
+    <div className="max-w-lg">
       <Link
         href={`/jemaws/${id}`}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 mb-6 transition-colors"
       >
-        <ArrowLeft className="w-3.5 h-3.5" />
+        <ArrowLeft className="w-3 h-3" />
         Back to {jemaw.name}
       </Link>
-      <h1 className="text-xl font-bold mb-6">Record a settlement</h1>
-      <CreateSettlementForm
-        jemawId={id}
-        members={otherMembers}
-        currency={jemaw.currency}
-        defaultReceiverId={defaultReceiverId}
-        defaultAmount={defaultAmount}
-      />
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-900">Record a settlement</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Upload payment proof for the receiver to confirm</p>
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <CreateSettlementForm
+          jemawId={id}
+          members={otherMembers}
+          currency={jemaw.currency}
+          defaultReceiverId={defaultReceiverId}
+          defaultAmount={defaultAmount}
+        />
+      </div>
     </div>
   );
 }

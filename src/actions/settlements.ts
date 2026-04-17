@@ -102,7 +102,7 @@ export async function createSettlement(input: CreateSettlementInput) {
       jemawId,
       jemawName: jemaw?.name || "Unknown Group",
       description: description || `Payment from ${payer.name}`,
-      amount: formatCurrency(amount),
+      amount: formatCurrency(amount, jemaw?.currency || "USD"),
       payerName: payer.name,
       receiver: {
         email: receiver.email,
@@ -126,7 +126,7 @@ export async function createSettlement(input: CreateSettlementInput) {
 
     createNotification({
       userId: receiverId,
-      message: `${payer.name} recorded a payment of ${formatCurrency(amount)} for you`,
+      message: `${payer.name} recorded a payment of ${formatCurrency(amount, jemaw?.currency || "USD")} for you`,
       link: `/jemaws/${jemawId}`,
     }).catch(console.error);
   }
@@ -229,7 +229,7 @@ export async function approveSettlement(
     }),
     createNotification({
       userId: settlement.payerId,
-      message: `Your payment of ${formatCurrency(settlement.amount)} was confirmed`,
+      message: `Your payment of ${formatCurrency(settlement.amount, settlement.jemaw.currency)} was confirmed`,
       link: `/jemaws/${settlement.jemawId}`,
     }),
   ]).catch(console.error);
@@ -254,6 +254,7 @@ export async function rejectSettlement(input: {
 
   const settlement = await db.query.settlements.findFirst({
     where: eq(settlements.id, settlementId),
+    with: { jemaw: true },
   });
 
   if (!settlement) {
@@ -295,7 +296,7 @@ export async function rejectSettlement(input: {
     }),
     createNotification({
       userId: settlement.payerId,
-      message: `Your payment of ${formatCurrency(settlement.amount)} was rejected: ${reason}`,
+      message: `Your payment of ${formatCurrency(settlement.amount, settlement.jemaw.currency)} was rejected: ${reason}`,
       link: `/jemaws/${settlement.jemawId}`,
     }),
   ]).catch(console.error);

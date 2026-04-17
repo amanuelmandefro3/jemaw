@@ -45,7 +45,7 @@ export default async function DashboardPage() {
           <div className="flex items-baseline gap-3 mb-4">
             <p className={`text-5xl font-bold tracking-tight ${netBalance >= 0 ? "text-slate-900" : "text-rose-600"}`}>
               {netBalance >= 0
-                ? totalOwedToMe === 0 ? formatCurrency(0, primaryCurrency) : `+${formatCurrency(totalOwedToMe, primaryCurrency)}`
+                ? netBalance === 0 ? formatCurrency(0, primaryCurrency) : `+${formatCurrency(netBalance, primaryCurrency)}`
                 : `−${formatCurrency(Math.abs(netBalance), primaryCurrency)}`}
             </p>
             <p className="text-sm text-slate-400 pb-1">net balance</p>

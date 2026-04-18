@@ -95,9 +95,9 @@ export function SettleUpDialog({
                 <p className="text-sm text-slate-500 mb-4">
                   These payments settle all debts in the fewest transactions.
                 </p>
-                {suggestions.map((s, i) => (
+                {suggestions.map((s) => (
                   <div
-                    key={i}
+                    key={`${s.payerId}-${s.receiverId}-${s.amount}`}
                     className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/60"
                   >
                     <div className="flex items-center gap-2 text-sm min-w-0">

@@ -6,6 +6,7 @@ import { JemawTabs } from "./jemaw-tabs";
 import { InviteMemberDialog } from "./invite-member-dialog";
 import { EditJemawDialog } from "./edit-jemaw-dialog";
 import { SettleUpDialog } from "./settle-up-dialog";
+import { AddBillDialog } from "./add-bill-dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { Plus, ArrowLeftRight, UserPlus, ArrowLeft, Settings, BarChart2 } from "lucide-react";
@@ -89,18 +90,23 @@ export default async function JemawPage({
                 Invite
               </Button>
             </InviteMemberDialog>
-            <SettleUpDialog jemawId={id} currency={jemaw.currency}>
+            <SettleUpDialog jemawId={id} currency={jemaw.currency} members={jemaw.members}>
               <Button variant="outline" size="sm" className="h-8 text-xs">
                 <ArrowLeftRight className="w-3.5 h-3.5 mr-1.5" />
                 Settle up
               </Button>
             </SettleUpDialog>
-            <Link href={`/jemaws/${id}/bills/new`}>
+            <AddBillDialog
+              jemawId={id}
+              members={jemaw.members}
+              currentUserId={currentUserId}
+              currency={jemaw.currency}
+            >
               <Button size="sm" className="h-8 text-xs">
                 <Plus className="w-3.5 h-3.5 mr-1.5" />
                 Add bill
               </Button>
-            </Link>
+            </AddBillDialog>
           </div>
         </div>
       </div>

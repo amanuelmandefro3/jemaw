@@ -141,6 +141,7 @@ export function SettleUpDialog({
                 setOpen(false);
                 setStep("suggestions");
                 setSelected(null);
+                setSuggestions(null);
                 router.refresh();
               }}
               onBack={() => { setStep("suggestions"); setSelected(null); }}

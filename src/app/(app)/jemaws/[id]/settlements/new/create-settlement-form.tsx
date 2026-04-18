@@ -29,12 +29,16 @@ export function CreateSettlementForm({
   currency = "USD",
   defaultReceiverId,
   defaultAmount,
+  onSuccess,
+  onBack,
 }: {
   jemawId: string;
   members: Member[];
   currency?: string;
   defaultReceiverId?: string;
   defaultAmount?: string;
+  onSuccess?: () => void;
+  onBack?: () => void;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,7 +109,8 @@ export function CreateSettlementForm({
           paymentProofUrl: proofUrl,
         });
         toast.success(result.message);
-        router.push(`/jemaws/${jemawId}`);
+        if (onSuccess) onSuccess();
+        else router.push(`/jemaws/${jemawId}`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to record settlement");
       }
@@ -217,10 +222,10 @@ export function CreateSettlementForm({
           type="button"
           variant="outline"
           className="flex-1"
-          onClick={() => router.push(`/jemaws/${jemawId}`)}
+          onClick={() => onBack ? onBack() : router.push(`/jemaws/${jemawId}`)}
           disabled={isLoading}
         >
-          Cancel
+          {onBack ? "Back" : "Cancel"}
         </Button>
         <Button type="submit" className="flex-1" disabled={isLoading}>
           {uploading ? (

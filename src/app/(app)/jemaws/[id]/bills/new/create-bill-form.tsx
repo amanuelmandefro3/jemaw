@@ -33,11 +33,13 @@ export function CreateBillForm({
   members,
   currentUserId,
   currency,
+  onSuccess,
 }: {
   jemawId: string;
   members: Member[];
   currentUserId: string;
   currency: string;
+  onSuccess?: () => void;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,7 +100,8 @@ export function CreateBillForm({
           receiptUrl,
         });
         toast.success(result.message);
-        router.push(`/jemaws/${jemawId}`);
+        if (onSuccess) onSuccess();
+        else router.push(`/jemaws/${jemawId}`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to create bill");
       }

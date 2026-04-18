@@ -1,42 +1,57 @@
 "use client";
 
 import {
-  PieChart,
-  Pie,
-  Cell,
   BarChart,
   Bar,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Legend,
+  Cell,
+  ReferenceLine,
+  LabelList,
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
 
-const COLORS = [
-  "#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16",
-  "#06b6d4", "#e11d48",
+const CAT_COLORS = [
+  "#6366f1", "#f59e0b", "#10b981", "#3b82f6",
+  "#8b5cf6", "#f43f5e", "#14b8a6", "#f97316",
 ];
 
 type CategoryData = { category: string; total: number };
 type BalanceData = { name: string; balance: number; userId: string };
 
-function CustomTooltip({
-  active,
-  payload,
-  currency,
+function CategoryTooltip({
+  active, payload, currency,
 }: {
   active?: boolean;
-  payload?: { name: string; value: number }[];
+  payload?: { value: number; payload: CategoryData }[];
   currency: string;
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-background border rounded-md px-3 py-2 text-sm shadow-md">
-      <p className="font-medium">{payload[0].name}</p>
-      <p className="text-muted-foreground">{formatCurrency(payload[0].value, currency)}</p>
+    <div className="bg-white border border-slate-100 rounded-xl px-3.5 py-2.5 shadow-lg">
+      <p className="text-xs text-slate-500 capitalize mb-0.5">{payload[0].payload.category}</p>
+      <p className="text-sm font-bold text-slate-900">{formatCurrency(payload[0].value, currency)}</p>
+    </div>
+  );
+}
+
+function BalanceTooltip({
+  active, payload, currency,
+}: {
+  active?: boolean;
+  payload?: { value: number; payload: BalanceData }[];
+  currency: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const val = payload[0].value;
+  return (
+    <div className="bg-white border border-slate-100 rounded-xl px-3.5 py-2.5 shadow-lg">
+      <p className="text-xs text-slate-500 mb-0.5">{payload[0].payload.name}</p>
+      <p className={`text-sm font-bold ${val > 0 ? "text-emerald-600" : val < 0 ? "text-rose-500" : "text-slate-400"}`}>
+        {val === 0 ? "Settled" : `${val > 0 ? "+" : "−"}${formatCurrency(Math.abs(val), currency)}`}
+      </p>
     </div>
   );
 }
@@ -44,109 +59,139 @@ function CustomTooltip({
 export function StatsCharts({
   byCategory,
   memberBalances,
+  totalSpent,
   currency,
 }: {
   byCategory: CategoryData[];
   memberBalances: BalanceData[];
+  totalSpent: number;
   currency: string;
 }) {
-  const positiveBalances = memberBalances.filter((m) => m.balance > 0);
-  const negativeBalances = memberBalances.filter((m) => m.balance < 0).map((m) => ({
-    ...m,
-    balance: Math.abs(m.balance),
-  }));
+  const sortedCats = [...byCategory].sort((a, b) => b.total - a.total);
+  const sortedMembers = [...memberBalances].sort((a, b) => b.balance - a.balance);
 
   return (
-    <div className="space-y-8">
-      {byCategory.length > 0 && (
+    <div className="space-y-16">
+
+      {/* Spending by category */}
+      {sortedCats.length > 0 && (
         <div>
-          <h2 className="text-base font-semibold mb-4">Spending by category</h2>
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="w-full sm:w-64 h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={byCategory}
-                    dataKey="total"
-                    nameKey="category"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    labelLine={false}
-                  >
-                    {byCategory.map((_, index) => (
-                      <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip currency={currency} />} />
-                  <Legend
-                    formatter={(value) => (
-                      <span className="text-xs capitalize">{value}</span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex-1 space-y-1.5 w-full">
-              {byCategory.map((cat, i) => (
-                <div key={cat.category} className="flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-sm shrink-0"
-                      style={{ background: COLORS[i % COLORS.length] }}
-                    />
-                    <span className="capitalize">{cat.category}</span>
-                  </div>
-                  <span className="font-medium tabular-nums">
-                    {formatCurrency(cat.total, currency)}
-                  </span>
-                </div>
-              ))}
-            </div>
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-8">
+            Where the money went
+          </p>
+
+          <ResponsiveContainer width="100%" height={sortedCats.length <= 3 ? 180 : 240}>
+            <BarChart
+              data={sortedCats}
+              margin={{ top: 24, right: 8, left: 8, bottom: 4 }}
+              barCategoryGap="40%"
+            >
+              <XAxis
+                dataKey="category"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: "#94a3b8" }}
+                tickFormatter={(v: string) => v.charAt(0).toUpperCase() + v.slice(1)}
+              />
+              <YAxis hide />
+              <Tooltip
+                content={<CategoryTooltip currency={currency} />}
+                cursor={{ fill: "rgba(99,102,241,0.04)", radius: 6 }}
+              />
+              <Bar dataKey="total" radius={[5, 5, 2, 2]} maxBarSize={52}>
+                {sortedCats.map((_, i) => (
+                  <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} fillOpacity={0.85} />
+                ))}
+                <LabelList
+                  dataKey="total"
+                  position="top"
+                  formatter={(v: unknown) => formatCurrency(v as number, currency)}
+                  style={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+
+          {/* Colour key — inline, minimal */}
+          <div className="flex flex-wrap gap-x-5 gap-y-2 mt-2">
+            {sortedCats.map((cat, i) => (
+              <span key={cat.category} className="flex items-center gap-1.5 text-xs text-slate-500">
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: CAT_COLORS[i % CAT_COLORS.length] }}
+                />
+                <span className="capitalize">{cat.category}</span>
+                <span className="text-slate-300 ml-0.5">{Math.round((cat.total / totalSpent) * 100)}%</span>
+              </span>
+            ))}
           </div>
         </div>
       )}
 
-      {memberBalances.length > 0 && (
+      {/* Divider */}
+      {sortedCats.length > 0 && sortedMembers.length > 0 && (
+        <div className="border-t border-slate-100" />
+      )}
+
+      {/* Member balances */}
+      {sortedMembers.length > 0 && (
         <div>
-          <h2 className="text-base font-semibold mb-4">Member balances</h2>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={memberBalances}
-                margin={{ top: 4, right: 8, left: 8, bottom: 4 }}
-              >
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v) => formatCurrency(v, currency)}
-                />
-                <Tooltip
-                  formatter={(value) => [
-                    formatCurrency(Number(value), currency),
-                    "Balance",
-                  ]}
-                />
-                <Bar
-                  dataKey="balance"
-                  radius={[4, 4, 0, 0]}
-                  fill="#6366f1"
-                  // Color bars: green if positive, red if negative
-                  label={false}
-                >
-                  {memberBalances.map((entry, index) => (
-                    <Cell
-                      key={index}
-                      fill={entry.balance > 0 ? "#16a34a" : entry.balance < 0 ? "#dc2626" : "#94a3b8"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            Green = owed money · Red = owes money · Gray = settled
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-widest mb-8">
+            Who owes what
           </p>
+
+          <ResponsiveContainer width="100%" height={sortedMembers.length * 48 + 20}>
+            <BarChart
+              layout="vertical"
+              data={sortedMembers}
+              margin={{ top: 0, right: 90, left: 0, bottom: 0 }}
+              barCategoryGap="38%"
+            >
+              <XAxis type="number" hide />
+              <YAxis
+                dataKey="name"
+                type="category"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 13, fill: "#475569", fontWeight: 500 }}
+                width={88}
+              />
+              <ReferenceLine x={0} stroke="#e2e8f0" strokeWidth={1} />
+              <Tooltip
+                content={<BalanceTooltip currency={currency} />}
+                cursor={{ fill: "rgba(100,116,139,0.04)", radius: 4 }}
+              />
+              <Bar dataKey="balance" radius={[2, 4, 4, 2]} maxBarSize={12}>
+                {sortedMembers.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={entry.balance > 0 ? "#10b981" : entry.balance < 0 ? "#f43f5e" : "#cbd5e1"}
+                    fillOpacity={0.9}
+                  />
+                ))}
+                <LabelList
+                  dataKey="balance"
+                  position="right"
+                  formatter={(v: unknown) => {
+                    const n = v as number;
+                    return n === 0 ? "Settled" : `${n > 0 ? "+" : "−"}${formatCurrency(Math.abs(n), currency)}`;
+                  }}
+                  style={{ fontSize: 12, fill: "#64748b", fontWeight: 600 }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+
+          <div className="flex items-center gap-5 mt-4">
+            <span className="flex items-center gap-1.5 text-xs text-slate-400">
+              <span className="w-5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+              owed to them
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-slate-400">
+              <span className="w-5 h-1.5 rounded-full bg-rose-400 inline-block" />
+              they owe
+            </span>
+          </div>
         </div>
       )}
     </div>

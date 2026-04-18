@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
 
 type JemawWithBalance = {
   id: string;
@@ -11,59 +12,83 @@ type JemawWithBalance = {
   members: { id?: string; userId: string }[];
 };
 
-const GROUP_COLORS = [
-  "bg-violet-100 text-violet-700",
-  "bg-indigo-100 text-indigo-700",
-  "bg-sky-100 text-sky-700",
-  "bg-emerald-100 text-emerald-700",
-  "bg-amber-100 text-amber-700",
-  "bg-rose-100 text-rose-700",
-  "bg-cyan-100 text-cyan-700",
-  "bg-orange-100 text-orange-700",
+const PALETTE = [
+  { bg: "bg-violet-500",  dot: "bg-violet-400"  },
+  { bg: "bg-indigo-500",  dot: "bg-indigo-400"  },
+  { bg: "bg-sky-500",     dot: "bg-sky-400"     },
+  { bg: "bg-emerald-500", dot: "bg-emerald-400" },
+  { bg: "bg-amber-500",   dot: "bg-amber-400"   },
+  { bg: "bg-rose-500",    dot: "bg-rose-400"    },
+  { bg: "bg-cyan-500",    dot: "bg-cyan-400"    },
+  { bg: "bg-orange-500",  dot: "bg-orange-400"  },
 ];
 
-function getGroupColor(name: string) {
+const MEMBER_DOT_COLORS = [
+  "bg-indigo-400", "bg-violet-400", "bg-sky-400",
+  "bg-emerald-400", "bg-amber-400", "bg-rose-400",
+];
+
+function getPalette(name: string) {
   let hash = 0;
-  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) % GROUP_COLORS.length;
-  return GROUP_COLORS[hash];
+  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) % PALETTE.length;
+  return PALETTE[hash];
 }
 
-export function JemawCard({ jemaw }: { jemaw: JemawWithBalance }) {
+export function JemawRow({ jemaw }: { jemaw: JemawWithBalance }) {
   const balance = parseFloat(jemaw.myBalance);
-  const colorClass = getGroupColor(jemaw.name);
+  const palette = getPalette(jemaw.name);
   const initial = jemaw.name.charAt(0).toUpperCase();
+  const visibleMembers = jemaw.members.slice(0, 5);
+  const extraCount = jemaw.members.length - visibleMembers.length;
 
   return (
-    <Link href={`/jemaws/${jemaw.id}`}>
-      <div className="flex items-center px-6 py-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 cursor-pointer">
-        {/* Group avatar */}
-        <div className={`w-10 h-10 rounded-xl ${colorClass} flex items-center justify-center font-bold text-sm mr-4 shrink-0 select-none`}>
-          {initial}
+    <Link href={`/jemaws/${jemaw.id}`} className="group">
+      <div className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/80 transition-colors">
+        {/* Avatar */}
+        <div className={`w-9 h-9 rounded-xl ${palette.bg} flex items-center justify-center shrink-0 shadow-sm`}>
+          <span className="text-white font-bold text-sm leading-none">{initial}</span>
         </div>
 
-        {/* Info */}
+        {/* Name + members */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-medium text-slate-900 text-sm truncate">{jemaw.name}</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-sm font-semibold text-slate-900 truncate">{jemaw.name}</p>
             {jemaw.isAdmin && (
-              <span className="text-[10px] text-indigo-600 font-medium shrink-0">Admin</span>
+              <span className="text-[10px] font-medium text-indigo-500 shrink-0">Admin</span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {jemaw.members.length} member{jemaw.members.length !== 1 ? "s" : ""} · {jemaw.currency}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <div className="flex -space-x-1">
+              {visibleMembers.map((m, i) => (
+                <div
+                  key={m.userId}
+                  className={`w-3.5 h-3.5 rounded-full border border-white ${MEMBER_DOT_COLORS[i % MEMBER_DOT_COLORS.length]}`}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-slate-400">
+              {jemaw.members.length} member{jemaw.members.length !== 1 ? "s" : ""}
+              {extraCount > 0 && ` +${extraCount}`}
+            </span>
+          </div>
         </div>
 
         {/* Balance */}
-        <div className="text-right shrink-0 ml-4">
+        <div className="text-right shrink-0 mr-1">
           {balance === 0 ? (
-            <p className="text-xs text-slate-400">Settled</p>
+            <span className="text-xs text-slate-300 font-medium">Settled</span>
           ) : balance > 0 ? (
-            <p className="text-sm font-semibold text-emerald-600">+{formatCurrency(balance, jemaw.currency)}</p>
+            <span className="text-sm font-bold text-emerald-600">
+              +{formatCurrency(balance, jemaw.currency)}
+            </span>
           ) : (
-            <p className="text-sm font-semibold text-rose-500">−{formatCurrency(Math.abs(balance), jemaw.currency)}</p>
+            <span className="text-sm font-bold text-rose-500">
+              −{formatCurrency(Math.abs(balance), jemaw.currency)}
+            </span>
           )}
         </div>
+
+        <ChevronRight className="w-4 h-4 text-slate-200 group-hover:text-slate-400 transition-colors shrink-0" />
       </div>
     </Link>
   );

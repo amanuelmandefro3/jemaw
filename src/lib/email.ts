@@ -175,7 +175,10 @@ export async function sendVerificationEmail({
     return { success: true };
   } catch (error) {
     console.error("Failed to send verification email:", error);
-    return { success: false, error };
+    return {
+      success: false,
+      error: "Failed to send verification email",
+    };
   }
 }
 
